@@ -150,9 +150,13 @@ downloadBtn.addEventListener('click', handleDownload);
 
 // Check for shared URL on page load
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadFromURL);
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFromURL();
+        checkMobileAndShowToast();
+    });
 } else {
     loadFromURL();
+    checkMobileAndShowToast();
 }
 
 // Handle window resize with debouncing
@@ -755,4 +759,47 @@ function handleDownload() {
     link.download = 'pikcelgrid-output.png';
     link.href = downloadCanvas.toDataURL('image/png');
     link.click();
+}
+
+// Mobile detection and toast notification
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (window.innerWidth <= 768 && 'ontouchstart' in window);
+}
+
+function checkMobileAndShowToast() {
+    if (isMobileDevice()) {
+        const toast = document.getElementById('mobileToast');
+        const toastClose = document.getElementById('toastClose');
+        
+        if (toast && !localStorage.getItem('mobileToastDismissed')) {
+            // Show toast after a short delay
+            setTimeout(() => {
+                toast.style.display = 'block';
+                toast.classList.add('show');
+            }, 500);
+            
+            // Close button handler
+            if (toastClose) {
+                toastClose.addEventListener('click', () => {
+                    toast.style.animation = 'toastSlideOut 0.4s ease-out forwards';
+                    setTimeout(() => {
+                        toast.style.display = 'none';
+                        localStorage.setItem('mobileToastDismissed', 'true');
+                    }, 400);
+                });
+            }
+            
+            // Auto-dismiss after 10 seconds
+            setTimeout(() => {
+                if (toast.style.display !== 'none') {
+                    toast.style.animation = 'toastSlideOut 0.4s ease-out forwards';
+                    setTimeout(() => {
+                        toast.style.display = 'none';
+                        localStorage.setItem('mobileToastDismissed', 'true');
+                    }, 400);
+                }
+            }, 10000);
+        }
+    }
 }
