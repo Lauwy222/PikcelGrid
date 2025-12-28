@@ -26,16 +26,22 @@
 
                 <div class="control-group">
                     <label for="gridSize" class="slider-label">
-                        <span>Grid Size (Columns): <strong id="gridSizeValue">10</strong></span>
+                        <span>Grid Size (Columns):</span>
                     </label>
-                    <input type="range" id="gridSize" min="5" max="100" value="10" class="slider">
+                    <div class="slider-input-group">
+                        <input type="range" id="gridSize" min="5" max="100" value="10" class="slider">
+                        <input type="number" id="gridSizeInput" min="5" max="100" value="10" class="number-input">
+                    </div>
                 </div>
 
                 <div class="control-group">
                     <label for="maxColors" class="slider-label">
-                        <span>Max Colors: <strong id="maxColorsValue">3</strong></span>
+                        <span>Max Colors:</span>
                     </label>
-                    <input type="range" id="maxColors" min="2" max="10" value="3" class="slider">
+                    <div class="slider-input-group">
+                        <input type="range" id="maxColors" min="2" max="50" value="3" class="slider">
+                        <input type="number" id="maxColorsInput" min="2" max="50" value="3" class="number-input">
+                    </div>
                 </div>
 
                 <div class="control-group">

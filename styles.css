@@ -124,14 +124,45 @@ body {
     font-size: 1.2em;
 }
 
+.slider-input-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .slider {
-    width: 100%;
+    flex: 1;
     height: 8px;
     border-radius: 5px;
     background: #ffe0ec;
     outline: none;
     -webkit-appearance: none;
     appearance: none;
+}
+
+.number-input {
+    width: 70px;
+    padding: 8px 10px;
+    border: 2px solid #ffe0ec;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ff6b9d;
+    text-align: center;
+    background: white;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.number-input:focus {
+    border-color: #ff6b9d;
+    box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
+}
+
+.number-input::-webkit-inner-spin-button,
+.number-input::-webkit-outer-spin-button {
+    opacity: 1;
+    cursor: pointer;
 }
 
 .slider::-webkit-slider-thumb {

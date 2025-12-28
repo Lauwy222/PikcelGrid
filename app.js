@@ -10,9 +10,9 @@ let maxColors = 3;
 // DOM Elements
 const imageUpload = document.getElementById('imageUpload');
 const gridSizeSlider = document.getElementById('gridSize');
-const gridSizeValue = document.getElementById('gridSizeValue');
+const gridSizeInput = document.getElementById('gridSizeInput');
 const maxColorsSlider = document.getElementById('maxColors');
-const maxColorsValue = document.getElementById('maxColorsValue');
+const maxColorsInput = document.getElementById('maxColorsInput');
 const fileInfo = document.getElementById('fileInfo');
 const emptyState = document.getElementById('emptyState');
 const gridContainer = document.getElementById('gridContainer');
@@ -28,8 +28,12 @@ const ctx = gridCanvas.getContext('2d');
 
 // Initialize
 imageUpload.addEventListener('change', handleImageUpload);
-gridSizeSlider.addEventListener('input', handleGridSizeChange);
-maxColorsSlider.addEventListener('input', handleMaxColorsChange);
+gridSizeSlider.addEventListener('input', handleGridSizeSliderChange);
+gridSizeInput.addEventListener('input', handleGridSizeInputChange);
+gridSizeInput.addEventListener('blur', handleGridSizeInputBlur);
+maxColorsSlider.addEventListener('input', handleMaxColorsSliderChange);
+maxColorsInput.addEventListener('input', handleMaxColorsInputChange);
+maxColorsInput.addEventListener('blur', handleMaxColorsInputBlur);
 showGridLinesCheckbox.addEventListener('change', handleGridLinesToggle);
 downloadBtn.addEventListener('click', handleDownload);
 
@@ -64,17 +68,97 @@ function handleImageUpload(e) {
     reader.readAsDataURL(file);
 }
 
-function handleGridSizeChange(e) {
-    gridCols = parseInt(e.target.value);
-    gridSizeValue.textContent = gridCols;
+function handleGridSizeSliderChange(e) {
+    const value = parseInt(e.target.value);
+    gridCols = value;
+    gridSizeInput.value = value;
     if (currentImage) {
         generateGrid();
     }
 }
 
-function handleMaxColorsChange(e) {
-    maxColors = parseInt(e.target.value);
-    maxColorsValue.textContent = maxColors;
+function handleGridSizeInputChange(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(gridSizeSlider.min);
+    const max = parseInt(gridSizeSlider.max);
+    
+    if (isNaN(value)) return;
+    
+    // Clamp value to min/max
+    value = Math.max(min, Math.min(max, value));
+    
+    gridCols = value;
+    gridSizeSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleGridSizeInputBlur(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(gridSizeSlider.min);
+    const max = parseInt(gridSizeSlider.max);
+    
+    if (isNaN(value) || value < min) {
+        value = min;
+    } else if (value > max) {
+        value = max;
+    }
+    
+    gridCols = value;
+    gridSizeSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleMaxColorsSliderChange(e) {
+    const value = parseInt(e.target.value);
+    maxColors = value;
+    maxColorsInput.value = value;
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleMaxColorsInputChange(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(maxColorsSlider.min);
+    const max = parseInt(maxColorsSlider.max);
+    
+    if (isNaN(value)) return;
+    
+    // Clamp value to min/max
+    value = Math.max(min, Math.min(max, value));
+    
+    maxColors = value;
+    maxColorsSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleMaxColorsInputBlur(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(maxColorsSlider.min);
+    const max = parseInt(maxColorsSlider.max);
+    
+    if (isNaN(value) || value < min) {
+        value = min;
+    } else if (value > max) {
+        value = max;
+    }
+    
+    maxColors = value;
+    maxColorsSlider.value = value;
+    e.target.value = value;
+    
     if (currentImage) {
         generateGrid();
     }
