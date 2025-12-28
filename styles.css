@@ -15,6 +15,9 @@ body {
 .container {
     max-width: 1400px;
     margin: 0 auto;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .header {
@@ -43,6 +46,7 @@ body {
     grid-template-columns: 300px 1fr;
     gap: 30px;
     align-items: start;
+    position: relative;
 }
 
 @media (max-width: 768px) {
@@ -69,15 +73,37 @@ body {
     }
 
     .main-content {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
         gap: 20px;
+        display: flex;
+        flex-direction: column;
     }
 
     .controls-panel {
-        position: relative;
-        top: auto;
+        position: relative !important;
+        top: auto !important;
+        max-height: none !important;
+        overflow-y: visible !important;
         padding: 20px;
         border-radius: 15px;
+        z-index: 1;
+    }
+
+    .preview-panel {
+        position: relative;
+        z-index: 1;
+        padding: 15px;
+        border-radius: 15px;
+        min-height: 300px;
+        width: 100%;
+        box-sizing: border-box;
+        order: 2;
+    }
+
+    .controls-panel {
+        order: 1;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .control-group {
@@ -94,20 +120,18 @@ body {
         font-size: 0.9rem;
     }
 
-    .preview-panel {
-        padding: 15px;
-        border-radius: 15px;
-        min-height: 300px;
-    }
-
     .grid-container {
         width: 100%;
         overflow-x: auto;
+        overflow-y: visible;
         -webkit-overflow-scrolling: touch;
+        position: relative;
+        max-width: 100%;
     }
 
     .grid-wrapper {
         min-width: fit-content;
+        position: relative;
     }
 
     .column-labels {
@@ -259,6 +283,9 @@ body {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     position: sticky;
     top: 20px;
+    z-index: 10;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
 }
 
 .control-group {
@@ -577,6 +604,9 @@ button, .upload-label {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .empty-state {
