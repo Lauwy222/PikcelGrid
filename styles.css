@@ -251,11 +251,15 @@ body {
 .grid-container {
     width: 100%;
     overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
 }
 
 .grid-wrapper {
     display: inline-block;
     position: relative;
+    transition: transform 0.2s ease;
 }
 
 .column-labels {

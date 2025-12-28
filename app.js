@@ -1,14 +1,18 @@
 // State
 let currentImage = null;
 let imageData = null;
+let scaledImageData = null;
 let gridCols = 10;
 let gridRows = 1;
 let showGridLines = true;
+let maxColors = 3;
 
 // DOM Elements
 const imageUpload = document.getElementById('imageUpload');
 const gridSizeSlider = document.getElementById('gridSize');
 const gridSizeValue = document.getElementById('gridSizeValue');
+const maxColorsSlider = document.getElementById('maxColors');
+const maxColorsValue = document.getElementById('maxColorsValue');
 const fileInfo = document.getElementById('fileInfo');
 const emptyState = document.getElementById('emptyState');
 const gridContainer = document.getElementById('gridContainer');
@@ -25,8 +29,21 @@ const ctx = gridCanvas.getContext('2d');
 // Initialize
 imageUpload.addEventListener('change', handleImageUpload);
 gridSizeSlider.addEventListener('input', handleGridSizeChange);
+maxColorsSlider.addEventListener('input', handleMaxColorsChange);
 showGridLinesCheckbox.addEventListener('change', handleGridLinesToggle);
 downloadBtn.addEventListener('click', handleDownload);
+
+// Handle window resize to recalculate scaling
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        if (currentImage) {
+            const cellSize = 30;
+            scaleView(cellSize);
+        }
+    }, 250);
+});
 
 function handleImageUpload(e) {
     const file = e.target.files[0];
@@ -39,7 +56,6 @@ function handleImageUpload(e) {
         const img = new Image();
         img.onload = function() {
             currentImage = img;
-            loadImageData();
             generateGrid();
         };
         img.src = event.target.result;
@@ -48,19 +64,17 @@ function handleImageUpload(e) {
     reader.readAsDataURL(file);
 }
 
-function loadImageData() {
-    // Create a temporary canvas to get image data
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = currentImage.width;
-    tempCanvas.height = currentImage.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(currentImage, 0, 0);
-    imageData = tempCtx.getImageData(0, 0, currentImage.width, currentImage.height);
-}
-
 function handleGridSizeChange(e) {
     gridCols = parseInt(e.target.value);
     gridSizeValue.textContent = gridCols;
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleMaxColorsChange(e) {
+    maxColors = parseInt(e.target.value);
+    maxColorsValue.textContent = maxColors;
     if (currentImage) {
         generateGrid();
     }
@@ -79,43 +93,110 @@ function calculateGridRows(cols, imgWidth, imgHeight) {
     return rows;
 }
 
-function getAverageColor(x, y, cellW, cellH, imgWidth, imgHeight) {
-    const data = imageData.data;
-    let r = 0, g = 0, b = 0, count = 0;
-
-    // Sample pixels in the cell region
-    const startX = Math.floor(x);
-    const startY = Math.floor(y);
-    const endX = Math.min(Math.floor(x + cellW), imgWidth);
-    const endY = Math.min(Math.floor(y + cellH), imgHeight);
-
-    // Sample strategy: for larger cells, sample a grid; for smaller cells, sample all pixels
-    const sampleStep = Math.max(1, Math.floor(Math.min(cellW, cellH) / 5));
+function scaleImageToGrid(img, cols, rows) {
+    // Create a canvas scaled to grid dimensions
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = cols;
+    tempCanvas.height = rows;
+    const tempCtx = tempCanvas.getContext('2d');
     
-    for (let py = startY; py < endY; py += sampleStep) {
-        for (let px = startX; px < endX; px += sampleStep) {
-            const idx = (py * imgWidth + px) * 4;
-            r += data[idx];
-            g += data[idx + 1];
-            b += data[idx + 2];
-            count++;
-        }
+    // Use high-quality scaling
+    tempCtx.imageSmoothingEnabled = true;
+    tempCtx.imageSmoothingQuality = 'high';
+    tempCtx.drawImage(img, 0, 0, cols, rows);
+    
+    return tempCtx.getImageData(0, 0, cols, rows);
+}
+
+function quantizeColors(colors, maxColors) {
+    if (colors.length <= maxColors) return colors;
+
+    // Simple k-means clustering for color quantization
+    // Initialize centroids with evenly distributed colors
+    const centroids = [];
+    for (let i = 0; i < maxColors; i++) {
+        const idx = Math.floor((i / maxColors) * colors.length);
+        centroids.push({ r: colors[idx].r, g: colors[idx].g, b: colors[idx].b });
     }
 
-    if (count === 0) return { r: 0, g: 0, b: 0 };
+    // K-means iteration (simplified, fixed iterations)
+    for (let iter = 0; iter < 10; iter++) {
+        const clusters = Array(maxColors).fill().map(() => []);
+        
+        // Assign colors to nearest centroid
+        colors.forEach(color => {
+            let minDist = Infinity;
+            let nearestIdx = 0;
+            centroids.forEach((centroid, idx) => {
+                const dist = Math.pow(color.r - centroid.r, 2) +
+                           Math.pow(color.g - centroid.g, 2) +
+                           Math.pow(color.b - centroid.b, 2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestIdx = idx;
+                }
+            });
+            clusters[nearestIdx].push(color);
+        });
 
-    return {
-        r: Math.round(r / count),
-        g: Math.round(g / count),
-        b: Math.round(b / count)
-    };
+        // Update centroids
+        centroids.forEach((centroid, idx) => {
+            if (clusters[idx].length > 0) {
+                const avg = clusters[idx].reduce((acc, color) => {
+                    acc.r += color.r;
+                    acc.g += color.g;
+                    acc.b += color.b;
+                    return acc;
+                }, { r: 0, g: 0, b: 0 });
+                centroid.r = Math.round(avg.r / clusters[idx].length);
+                centroid.g = Math.round(avg.g / clusters[idx].length);
+                centroid.b = Math.round(avg.b / clusters[idx].length);
+            }
+        });
+    }
+
+    return centroids;
+}
+
+function findNearestColor(color, palette) {
+    let minDist = Infinity;
+    let nearest = palette[0];
+    
+    palette.forEach(paletteColor => {
+        const dist = Math.pow(color.r - paletteColor.r, 2) +
+                   Math.pow(color.g - paletteColor.g, 2) +
+                   Math.pow(color.b - paletteColor.b, 2);
+        if (dist < minDist) {
+            minDist = dist;
+            nearest = paletteColor;
+        }
+    });
+    
+    return nearest;
 }
 
 function generateGrid() {
-    if (!currentImage || !imageData) return;
+    if (!currentImage) return;
 
     // Calculate grid dimensions
     gridRows = calculateGridRows(gridCols, currentImage.width, currentImage.height);
+
+    // Scale image to grid size for efficient sampling
+    scaledImageData = scaleImageToGrid(currentImage, gridCols, gridRows);
+    
+    // Collect all colors from scaled image
+    const colors = [];
+    const data = scaledImageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        colors.push({
+            r: data[i],
+            g: data[i + 1],
+            b: data[i + 2]
+        });
+    }
+
+    // Quantize colors to maxColors palette
+    const colorPalette = quantizeColors(colors, maxColors);
 
     // Set canvas size (each cell is 30px)
     const cellSize = 30;
@@ -125,21 +206,21 @@ function generateGrid() {
     gridCanvas.width = canvasWidth;
     gridCanvas.height = canvasHeight;
 
-    // Calculate cell dimensions in image coordinates
-    const cellW = currentImage.width / gridCols;
-    const cellH = currentImage.height / gridRows;
-
     // Clear canvas
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    // Generate grid cells
+    // Generate grid cells using quantized colors
     for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
-            const imgX = col * cellW;
-            const imgY = row * cellH;
+            const idx = (row * gridCols + col) * 4;
+            const originalColor = {
+                r: data[idx],
+                g: data[idx + 1],
+                b: data[idx + 2]
+            };
 
-            // Get average color for this cell
-            const color = getAverageColor(imgX, imgY, cellW, cellH, currentImage.width, currentImage.height);
+            // Find nearest color in palette
+            const color = findNearestColor(originalColor, colorPalette);
 
             // Draw cell
             const x = col * cellSize;
@@ -157,6 +238,9 @@ function generateGrid() {
         }
     }
 
+    // Scale view to fit in viewport
+    scaleView(cellSize);
+
     // Generate labels
     generateLabels(cellSize);
 
@@ -167,6 +251,47 @@ function generateGrid() {
     emptyState.style.display = 'none';
     gridContainer.style.display = 'block';
     downloadBtn.disabled = false;
+}
+
+function scaleView(cellSize) {
+    const canvasWidth = gridCols * cellSize;
+    const canvasHeight = gridRows * cellSize;
+    const totalWidth = canvasWidth + 50; // +50 for row labels
+    const totalHeight = canvasHeight + 35; // +35 for column labels + margin
+    
+    // Get available space in preview panel
+    const previewPanel = document.querySelector('.preview-panel');
+    const maxWidth = previewPanel.clientWidth - 60; // padding
+    const maxHeight = Math.max(window.innerHeight - 350, 400); // minimum 400px height
+    
+    // Calculate scale to fit (don't scale up, only down)
+    const scaleX = maxWidth / totalWidth;
+    const scaleY = maxHeight / totalHeight;
+    const scale = Math.min(scaleX, scaleY, 1);
+    
+    const gridWrapper = document.querySelector('.grid-wrapper');
+    
+    if (scale < 1) {
+        // Scale the entire wrapper
+        gridWrapper.style.transform = `scale(${scale})`;
+        gridWrapper.style.transformOrigin = 'top left';
+        
+        // Set wrapper to actual size, transform will scale it visually
+        gridWrapper.style.width = `${totalWidth}px`;
+        gridWrapper.style.height = `${totalHeight}px`;
+        
+        // Container needs to account for scaled dimensions to prevent overflow
+        gridContainer.style.width = `${totalWidth * scale}px`;
+        gridContainer.style.height = `${totalHeight * scale}px`;
+    } else {
+        // Reset scaling when no scaling needed
+        gridWrapper.style.transform = '';
+        gridWrapper.style.transformOrigin = '';
+        gridWrapper.style.width = '';
+        gridWrapper.style.height = '';
+        gridContainer.style.width = '';
+        gridContainer.style.height = '';
+    }
 }
 
 function generateLabels(cellSize) {
@@ -202,4 +327,3 @@ function handleDownload() {
     link.href = gridCanvas.toDataURL('image/png');
     link.click();
 }
-
