@@ -45,32 +45,42 @@
                 </div>
 
                 <div class="control-group">
-                    <label for="imageScale" class="slider-label">
-                        <span>Zoom (%):</span>
-                    </label>
-                    <div class="slider-input-group">
-                        <input type="range" id="imageScale" min="50" max="200" value="100" class="slider">
-                        <input type="number" id="imageScaleInput" min="50" max="200" value="100" class="number-input">
-                    </div>
-                </div>
+                    <div class="advanced-section">
+                        <button type="button" class="advanced-toggle" id="advancedToggle">
+                            <span class="advanced-toggle-icon">▼</span>
+                            <span class="advanced-toggle-text">Advanced</span>
+                        </button>
+                        <div class="advanced-content" id="advancedContent" style="display: none;">
+                            <div class="control-group">
+                                <label for="imageScale" class="slider-label">
+                                    <span>Zoom (%):</span>
+                                </label>
+                                <div class="slider-input-group">
+                                    <input type="range" id="imageScale" min="50" max="200" value="100" class="slider">
+                                    <input type="number" id="imageScaleInput" min="50" max="200" value="100" class="number-input">
+                                </div>
+                            </div>
 
-                <div class="control-group">
-                    <label for="offsetX" class="slider-label">
-                        <span>Offset X (%):</span>
-                    </label>
-                    <div class="slider-input-group">
-                        <input type="range" id="offsetX" min="-50" max="50" value="0" class="slider">
-                        <input type="number" id="offsetXInput" min="-50" max="50" value="0" class="number-input">
-                    </div>
-                </div>
+                            <div class="control-group">
+                                <label for="offsetX" class="slider-label">
+                                    <span>Offset X (%):</span>
+                                </label>
+                                <div class="slider-input-group">
+                                    <input type="range" id="offsetX" min="-50" max="50" value="0" class="slider">
+                                    <input type="number" id="offsetXInput" min="-50" max="50" value="0" class="number-input">
+                                </div>
+                            </div>
 
-                <div class="control-group">
-                    <label for="offsetY" class="slider-label">
-                        <span>Offset Y (%):</span>
-                    </label>
-                    <div class="slider-input-group">
-                        <input type="range" id="offsetY" min="-50" max="50" value="0" class="slider">
-                        <input type="number" id="offsetYInput" min="-50" max="50" value="0" class="number-input">
+                            <div class="control-group">
+                                <label for="offsetY" class="slider-label">
+                                    <span>Offset Y (%):</span>
+                                </label>
+                                <div class="slider-input-group">
+                                    <input type="range" id="offsetY" min="-50" max="50" value="0" class="slider">
+                                    <input type="number" id="offsetYInput" min="-50" max="50" value="0" class="number-input">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -85,6 +95,10 @@
                         <input type="checkbox" id="showGridLines" checked>
                         <span>Show Grid Lines</span>
                     </label>
+                </div>
+
+                <div class="control-group">
+                    <button id="shareBtn" class="share-btn" disabled>Share Link</button>
                 </div>
 
                 <div class="control-group">

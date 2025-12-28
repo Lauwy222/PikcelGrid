@@ -1,7 +1,21 @@
+// Constants
+const CELL_SIZE = 30;
+const LABEL_WIDTH = 50;
+const LABEL_HEIGHT = 30;
+const LABEL_WIDTH_MOBILE = 45;
+const LABEL_HEIGHT_MOBILE = 25;
+const MOBILE_BREAKPOINT = 768;
+const GRID_COLORS = {
+    LINE: 'rgba(255, 107, 157, 0.2)',
+    BACKGROUND: '#ffe0ec',
+    TEXT: '#ff6b9d'
+};
+
 // State
 let currentImage = null;
 let imageData = null;
 let scaledImageData = null;
+let originalImageDataURL = null;
 let gridCols = 10;
 let gridRows = 1;
 let showGridLines = true;
@@ -10,7 +24,7 @@ let imageScale = 100;
 let offsetX = 0;
 let offsetY = 0;
 
-// DOM Elements
+// DOM Elements - cache all upfront
 const imageUpload = document.getElementById('imageUpload');
 const gridSizeSlider = document.getElementById('gridSize');
 const gridSizeInput = document.getElementById('gridSizeInput');
@@ -30,40 +44,108 @@ const rowLabels = document.getElementById('rowLabels');
 const columnLabels = document.getElementById('columnLabels');
 const resolutionText = document.getElementById('resolutionText');
 const showGridLinesCheckbox = document.getElementById('showGridLines');
+const shareBtn = document.getElementById('shareBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+const advancedToggle = document.getElementById('advancedToggle');
+const advancedContent = document.getElementById('advancedContent');
+const advancedSection = document.querySelector('.advanced-section');
+const previewPanel = document.querySelector('.preview-panel');
+const gridWrapper = document.querySelector('.grid-wrapper');
 
 // Canvas context
 const ctx = gridCanvas.getContext('2d');
 
-// Initialize
+// Debounce utility for expensive operations
+let generateGridTimeout = null;
+function debounceGenerateGrid() {
+    clearTimeout(generateGridTimeout);
+    generateGridTimeout = setTimeout(() => {
+        if (currentImage) generateGrid();
+    }, 50); // 50ms debounce for smooth slider interaction
+}
+
+// Generic input handler factory to reduce code duplication
+function createInputHandler(stateKey, slider, input, onChange) {
+    return {
+        sliderChange: (e) => {
+            const value = parseInt(e.target.value, 10);
+            window[stateKey] = value;
+            input.value = value;
+            if (currentImage) onChange();
+        },
+        inputChange: (e) => {
+            let value = parseInt(e.target.value, 10);
+            const min = parseInt(slider.min, 10);
+            const max = parseInt(slider.max, 10);
+            
+            if (isNaN(value)) return;
+            value = Math.max(min, Math.min(max, value));
+            
+            window[stateKey] = value;
+            slider.value = value;
+            e.target.value = value;
+            
+            if (currentImage) onChange();
+        },
+        inputBlur: (e) => {
+            let value = parseInt(e.target.value, 10);
+            const min = parseInt(slider.min, 10);
+            const max = parseInt(slider.max, 10);
+            
+            if (isNaN(value) || value < min) value = min;
+            else if (value > max) value = max;
+            
+            window[stateKey] = value;
+            slider.value = value;
+            e.target.value = value;
+            
+            if (currentImage) onChange();
+        }
+    };
+}
+
+// Initialize input handlers
+const gridSizeHandler = createInputHandler('gridCols', gridSizeSlider, gridSizeInput, debounceGenerateGrid);
+const maxColorsHandler = createInputHandler('maxColors', maxColorsSlider, maxColorsInput, debounceGenerateGrid);
+const imageScaleHandler = createInputHandler('imageScale', imageScaleSlider, imageScaleInput, debounceGenerateGrid);
+const offsetXHandler = createInputHandler('offsetX', offsetXSlider, offsetXInput, debounceGenerateGrid);
+const offsetYHandler = createInputHandler('offsetY', offsetYSlider, offsetYInput, debounceGenerateGrid);
+
+// Event listeners
 imageUpload.addEventListener('change', handleImageUpload);
-gridSizeSlider.addEventListener('input', handleGridSizeSliderChange);
-gridSizeInput.addEventListener('input', handleGridSizeInputChange);
-gridSizeInput.addEventListener('blur', handleGridSizeInputBlur);
-maxColorsSlider.addEventListener('input', handleMaxColorsSliderChange);
-maxColorsInput.addEventListener('input', handleMaxColorsInputChange);
-maxColorsInput.addEventListener('blur', handleMaxColorsInputBlur);
-imageScaleSlider.addEventListener('input', handleImageScaleSliderChange);
-imageScaleInput.addEventListener('input', handleImageScaleInputChange);
-imageScaleInput.addEventListener('blur', handleImageScaleInputBlur);
-offsetXSlider.addEventListener('input', handleOffsetXSliderChange);
-offsetXInput.addEventListener('input', handleOffsetXInputChange);
-offsetXInput.addEventListener('blur', handleOffsetXInputBlur);
-offsetYSlider.addEventListener('input', handleOffsetYSliderChange);
-offsetYInput.addEventListener('input', handleOffsetYInputChange);
-offsetYInput.addEventListener('blur', handleOffsetYInputBlur);
+advancedToggle.addEventListener('click', handleAdvancedToggle);
+gridSizeSlider.addEventListener('input', gridSizeHandler.sliderChange);
+gridSizeInput.addEventListener('input', gridSizeHandler.inputChange);
+gridSizeInput.addEventListener('blur', gridSizeHandler.inputBlur);
+maxColorsSlider.addEventListener('input', maxColorsHandler.sliderChange);
+maxColorsInput.addEventListener('input', maxColorsHandler.inputChange);
+maxColorsInput.addEventListener('blur', maxColorsHandler.inputBlur);
+imageScaleSlider.addEventListener('input', imageScaleHandler.sliderChange);
+imageScaleInput.addEventListener('input', imageScaleHandler.inputChange);
+imageScaleInput.addEventListener('blur', imageScaleHandler.inputBlur);
+offsetXSlider.addEventListener('input', offsetXHandler.sliderChange);
+offsetXInput.addEventListener('input', offsetXHandler.inputChange);
+offsetXInput.addEventListener('blur', offsetXHandler.inputBlur);
+offsetYSlider.addEventListener('input', offsetYHandler.sliderChange);
+offsetYInput.addEventListener('input', offsetYHandler.inputChange);
+offsetYInput.addEventListener('blur', offsetYHandler.inputBlur);
 showGridLinesCheckbox.addEventListener('change', handleGridLinesToggle);
+shareBtn.addEventListener('click', handleShare);
 downloadBtn.addEventListener('click', handleDownload);
 
-// Handle window resize to recalculate scaling
-let resizeTimeout;
+// Check for shared URL on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadFromURL);
+} else {
+    loadFromURL();
+}
+
+// Handle window resize with debouncing
+let resizeTimeout = null;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-        if (currentImage) {
-            const cellSize = 30;
-            scaleView(cellSize);
-        }
+        if (currentImage) scaleView(CELL_SIZE);
     }, 250);
 });
 
@@ -74,335 +156,124 @@ function handleImageUpload(e) {
     fileInfo.textContent = file.name;
     const reader = new FileReader();
 
-    reader.onload = function(event) {
+    reader.onload = (event) => {
         const img = new Image();
-        img.onload = function() {
+        img.onload = () => {
             currentImage = img;
+            originalImageDataURL = event.target.result;
             generateGrid();
         };
+        img.onerror = () => {
+            alert('Error loading image. Please try a different file.');
+            fileInfo.textContent = 'Error loading image';
+        };
         img.src = event.target.result;
+    };
+
+    reader.onerror = () => {
+        alert('Error reading file. Please try again.');
+        fileInfo.textContent = 'Error reading file';
     };
 
     reader.readAsDataURL(file);
 }
 
-function handleGridSizeSliderChange(e) {
-    const value = parseInt(e.target.value);
-    gridCols = value;
-    gridSizeInput.value = value;
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleGridSizeInputChange(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(gridSizeSlider.min);
-    const max = parseInt(gridSizeSlider.max);
-    
-    if (isNaN(value)) return;
-    
-    // Clamp value to min/max
-    value = Math.max(min, Math.min(max, value));
-    
-    gridCols = value;
-    gridSizeSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleGridSizeInputBlur(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(gridSizeSlider.min);
-    const max = parseInt(gridSizeSlider.max);
-    
-    if (isNaN(value) || value < min) {
-        value = min;
-    } else if (value > max) {
-        value = max;
-    }
-    
-    gridCols = value;
-    gridSizeSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleMaxColorsSliderChange(e) {
-    const value = parseInt(e.target.value);
-    maxColors = value;
-    maxColorsInput.value = value;
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleMaxColorsInputChange(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(maxColorsSlider.min);
-    const max = parseInt(maxColorsSlider.max);
-    
-    if (isNaN(value)) return;
-    
-    // Clamp value to min/max
-    value = Math.max(min, Math.min(max, value));
-    
-    maxColors = value;
-    maxColorsSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleMaxColorsInputBlur(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(maxColorsSlider.min);
-    const max = parseInt(maxColorsSlider.max);
-    
-    if (isNaN(value) || value < min) {
-        value = min;
-    } else if (value > max) {
-        value = max;
-    }
-    
-    maxColors = value;
-    maxColorsSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleImageScaleSliderChange(e) {
-    const value = parseInt(e.target.value);
-    imageScale = value;
-    imageScaleInput.value = value;
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleImageScaleInputChange(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(imageScaleSlider.min);
-    const max = parseInt(imageScaleSlider.max);
-    
-    if (isNaN(value)) return;
-    
-    // Clamp value to min/max
-    value = Math.max(min, Math.min(max, value));
-    
-    imageScale = value;
-    imageScaleSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleImageScaleInputBlur(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(imageScaleSlider.min);
-    const max = parseInt(imageScaleSlider.max);
-    
-    if (isNaN(value) || value < min) {
-        value = min;
-    } else if (value > max) {
-        value = max;
-    }
-    
-    imageScale = value;
-    imageScaleSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleOffsetXSliderChange(e) {
-    const value = parseInt(e.target.value);
-    offsetX = value;
-    offsetXInput.value = value;
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleOffsetXInputChange(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(offsetXSlider.min);
-    const max = parseInt(offsetXSlider.max);
-    
-    if (isNaN(value)) return;
-    
-    // Clamp value to min/max
-    value = Math.max(min, Math.min(max, value));
-    
-    offsetX = value;
-    offsetXSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleOffsetXInputBlur(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(offsetXSlider.min);
-    const max = parseInt(offsetXSlider.max);
-    
-    if (isNaN(value) || value < min) {
-        value = min;
-    } else if (value > max) {
-        value = max;
-    }
-    
-    offsetX = value;
-    offsetXSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleOffsetYSliderChange(e) {
-    const value = parseInt(e.target.value);
-    offsetY = value;
-    offsetYInput.value = value;
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleOffsetYInputChange(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(offsetYSlider.min);
-    const max = parseInt(offsetYSlider.max);
-    
-    if (isNaN(value)) return;
-    
-    // Clamp value to min/max
-    value = Math.max(min, Math.min(max, value));
-    
-    offsetY = value;
-    offsetYSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
-function handleOffsetYInputBlur(e) {
-    let value = parseInt(e.target.value);
-    const min = parseInt(offsetYSlider.min);
-    const max = parseInt(offsetYSlider.max);
-    
-    if (isNaN(value) || value < min) {
-        value = min;
-    } else if (value > max) {
-        value = max;
-    }
-    
-    offsetY = value;
-    offsetYSlider.value = value;
-    e.target.value = value;
-    
-    if (currentImage) {
-        generateGrid();
-    }
-}
-
 function handleGridLinesToggle(e) {
     showGridLines = e.target.checked;
     if (currentImage) {
-        generateGrid();
+        // Only redraw grid lines, don't regenerate entire grid
+        redrawGridLines();
+    }
+}
+
+function redrawGridLines() {
+    if (!gridCanvas || !currentImage) return;
+    
+    const cellSize = CELL_SIZE;
+    ctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+    
+    // Redraw all cells
+    if (!scaledImageData) return;
+    const data = scaledImageData.data;
+    const colorPalette = quantizeColors(
+        Array.from({ length: data.length / 4 }, (_, i) => ({
+            r: data[i * 4],
+            g: data[i * 4 + 1],
+            b: data[i * 4 + 2]
+        })),
+        maxColors
+    );
+    
+    for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+            const idx = (row * gridCols + col) * 4;
+            const originalColor = {
+                r: data[idx],
+                g: data[idx + 1],
+                b: data[idx + 2]
+            };
+            const color = findNearestColor(originalColor, colorPalette);
+            const x = col * cellSize;
+            const y = row * cellSize;
+            
+            ctx.fillStyle = `rgb(${color.r},${color.g},${color.b})`;
+            ctx.fillRect(x, y, cellSize, cellSize);
+            
+            if (showGridLines) {
+                ctx.strokeStyle = GRID_COLORS.LINE;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, cellSize, cellSize);
+            }
+        }
     }
 }
 
 function calculateGridRows(cols, imgWidth, imgHeight) {
+    if (!imgWidth || imgHeight <= 0) return 1;
     const aspectRatio = imgHeight / imgWidth;
-    const rows = Math.max(1, Math.round(cols * aspectRatio));
-    return rows;
+    return Math.max(1, Math.round(cols * aspectRatio));
 }
 
 function scaleImageToGrid(img, cols, rows, scalePercent, offsetXPercent, offsetYPercent) {
-    // Create a canvas scaled to grid dimensions
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = cols;
     tempCanvas.height = rows;
     const tempCtx = tempCanvas.getContext('2d');
     
-    // Calculate zoom: scale > 100 means zoom in (crop from center)
-    // scale = 100 means full image, scale = 120 means crop to 100/120 of image from center
+    tempCtx.imageSmoothingEnabled = true;
+    tempCtx.imageSmoothingQuality = 'high';
+    
     const scaleFactor = scalePercent / 100;
     
-    if (scaleFactor === 1) {
-        // No zoom, use full image (but still apply offset if any)
-        if (offsetXPercent === 0 && offsetYPercent === 0) {
-            tempCtx.imageSmoothingEnabled = true;
-            tempCtx.imageSmoothingQuality = 'high';
-            tempCtx.drawImage(img, 0, 0, cols, rows);
-        } else {
-            // Apply offset even at 100% scale
-            const offsetX = (offsetXPercent / 100) * img.width;
-            const offsetY = (offsetYPercent / 100) * img.height;
-            const sourceX = Math.max(0, Math.min(img.width - cols, offsetX));
-            const sourceY = Math.max(0, Math.min(img.height - rows, offsetY));
-            const sourceWidth = Math.min(cols, img.width - sourceX);
-            const sourceHeight = Math.min(rows, img.height - sourceY);
-            
-            tempCtx.imageSmoothingEnabled = true;
-            tempCtx.imageSmoothingQuality = 'high';
-            tempCtx.drawImage(
-                img,
-                sourceX, sourceY, sourceWidth, sourceHeight,
-                0, 0, sourceWidth, sourceHeight
-            );
-        }
+    if (scaleFactor === 1 && offsetXPercent === 0 && offsetYPercent === 0) {
+        // Fast path: no zoom, no offset
+        tempCtx.drawImage(img, 0, 0, cols, rows);
+    } else if (scaleFactor === 1) {
+        // Offset only
+        const offsetX = (offsetXPercent / 100) * img.width;
+        const offsetY = (offsetYPercent / 100) * img.height;
+        const sourceX = Math.max(0, Math.min(img.width - cols, offsetX));
+        const sourceY = Math.max(0, Math.min(img.height - rows, offsetY));
+        const sourceWidth = Math.min(cols, img.width - sourceX);
+        const sourceHeight = Math.min(rows, img.height - sourceY);
+        
+        tempCtx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
     } else if (scaleFactor > 1) {
-        // Zoom in: crop with offset applied
+        // Zoom in with offset
         const sourceWidth = img.width / scaleFactor;
         const sourceHeight = img.height / scaleFactor;
-        
-        // Calculate center position, then apply offset
-        let sourceX = (img.width - sourceWidth) / 2;
-        let sourceY = (img.height - sourceHeight) / 2;
-        
-        // Apply offset (as percentage of the available movement range)
         const maxOffsetX = (img.width - sourceWidth) / 2;
         const maxOffsetY = (img.height - sourceHeight) / 2;
-        sourceX += (offsetXPercent / 100) * maxOffsetX * 2;
-        sourceY += (offsetYPercent / 100) * maxOffsetY * 2;
         
-        // Clamp to image boundaries
+        let sourceX = (img.width - sourceWidth) / 2 + (offsetXPercent / 100) * maxOffsetX * 2;
+        let sourceY = (img.height - sourceHeight) / 2 + (offsetYPercent / 100) * maxOffsetY * 2;
+        
         sourceX = Math.max(0, Math.min(img.width - sourceWidth, sourceX));
         sourceY = Math.max(0, Math.min(img.height - sourceHeight, sourceY));
         
-        tempCtx.imageSmoothingEnabled = true;
-        tempCtx.imageSmoothingQuality = 'high';
-        tempCtx.drawImage(
-            img,
-            sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (cropped with offset)
-            0, 0, cols, rows  // Destination rectangle (full canvas)
-        );
+        tempCtx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, cols, rows);
     } else {
-        // Zoom out: scale down (this case is less common but supported)
-        tempCtx.imageSmoothingEnabled = true;
-        tempCtx.imageSmoothingQuality = 'high';
+        // Zoom out
         tempCtx.drawImage(img, 0, 0, cols, rows);
     }
     
@@ -410,96 +281,90 @@ function scaleImageToGrid(img, cols, rows, scalePercent, offsetXPercent, offsetY
 }
 
 function quantizeColors(colors, maxColors) {
-    if (colors.length === 0) return [];
+    if (!colors || colors.length === 0) return [];
     if (maxColors <= 1) {
-        // Return average color if maxColors is 1
-        const avg = colors.reduce((acc, c) => {
-            acc.r += c.r;
-            acc.g += c.g;
-            acc.b += c.b;
-            return acc;
-        }, { r: 0, g: 0, b: 0 });
+        const total = colors.reduce((acc, c) => ({
+            r: acc.r + c.r,
+            g: acc.g + c.g,
+            b: acc.b + c.b
+        }), { r: 0, g: 0, b: 0 });
+        const len = colors.length;
         return [{
-            r: Math.round(avg.r / colors.length),
-            g: Math.round(avg.g / colors.length),
-            b: Math.round(avg.b / colors.length)
+            r: Math.round(total.r / len),
+            g: Math.round(total.g / len),
+            b: Math.round(total.b / len)
         }];
     }
 
-    // Use a threshold/contrast-based approach: cluster colors by similarity
-    // This guarantees we get exactly maxColors distinct colors
-    
-    // Calculate color ranges in the image
+    // Calculate color ranges
     let minR = 255, maxR = 0;
     let minG = 255, maxG = 0;
     let minB = 255, maxB = 0;
     
-    colors.forEach(color => {
-        minR = Math.min(minR, color.r);
-        maxR = Math.max(maxR, color.r);
-        minG = Math.min(minG, color.g);
-        maxG = Math.max(maxG, color.g);
-        minB = Math.min(minB, color.b);
-        maxB = Math.max(maxB, color.b);
-    });
+    for (let i = 0; i < colors.length; i++) {
+        const c = colors[i];
+        if (c.r < minR) minR = c.r;
+        if (c.r > maxR) maxR = c.r;
+        if (c.g < minG) minG = c.g;
+        if (c.g > maxG) maxG = c.g;
+        if (c.b < minB) minB = c.b;
+        if (c.b > maxB) maxB = c.b;
+    }
     
     const rangeR = maxR - minR || 255;
     const rangeG = maxG - minG || 255;
     const rangeB = maxB - minB || 255;
     
-    // Create buckets based on maxColors
-    // Use a 3D grid approach: divide each channel into bins
+    // Create buckets
     const binsPerChannel = Math.ceil(Math.pow(maxColors, 1/3));
     const binSizeR = Math.max(1, rangeR / binsPerChannel);
     const binSizeG = Math.max(1, rangeG / binsPerChannel);
     const binSizeB = Math.max(1, rangeB / binsPerChannel);
     
-    // Create buckets and collect colors
     const buckets = new Map();
     
-    colors.forEach(color => {
-        const binR = Math.min(binsPerChannel - 1, Math.floor((color.r - minR) / binSizeR));
-        const binG = Math.min(binsPerChannel - 1, Math.floor((color.g - minG) / binSizeG));
-        const binB = Math.min(binsPerChannel - 1, Math.floor((color.b - minB) / binSizeB));
+    for (let i = 0; i < colors.length; i++) {
+        const c = colors[i];
+        const binR = Math.min(binsPerChannel - 1, Math.floor((c.r - minR) / binSizeR));
+        const binG = Math.min(binsPerChannel - 1, Math.floor((c.g - minG) / binSizeG));
+        const binB = Math.min(binsPerChannel - 1, Math.floor((c.b - minB) / binSizeB));
         const key = `${binR},${binG},${binB}`;
         
-        if (!buckets.has(key)) {
-            buckets.set(key, []);
-        }
-        buckets.get(key).push(color);
-    });
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(c);
+    }
     
-    // Calculate average color for each bucket
+    // Calculate averages
     const bucketColors = Array.from(buckets.entries()).map(([key, bucketColors]) => {
-        const avg = bucketColors.reduce((acc, c) => {
-            acc.r += c.r;
-            acc.g += c.g;
-            acc.b += c.b;
-            return acc;
-        }, { r: 0, g: 0, b: 0 });
+        const total = bucketColors.reduce((acc, c) => ({
+            r: acc.r + c.r,
+            g: acc.g + c.g,
+            b: acc.b + c.b
+        }), { r: 0, g: 0, b: 0 });
+        const len = bucketColors.length;
         return {
-            r: Math.round(avg.r / bucketColors.length),
-            g: Math.round(avg.g / bucketColors.length),
-            b: Math.round(avg.b / bucketColors.length),
-            count: bucketColors.length
+            r: Math.round(total.r / len),
+            g: Math.round(total.g / len),
+            b: Math.round(total.b / len),
+            count: len
         };
     });
     
-    // Sort by frequency (most common colors first)
+    // Sort by frequency
     bucketColors.sort((a, b) => b.count - a.count);
     
-    // If we have more buckets than maxColors, merge similar ones
+    // Merge similar colors if needed
     while (bucketColors.length > maxColors) {
-        // Find two most similar colors and merge them
         let minDist = Infinity;
         let mergeIdx1 = 0;
         let mergeIdx2 = 1;
         
-        for (let i = 0; i < bucketColors.length; i++) {
+        for (let i = 0; i < bucketColors.length - 1; i++) {
             for (let j = i + 1; j < bucketColors.length; j++) {
-                const dist = Math.pow(bucketColors[i].r - bucketColors[j].r, 2) +
-                           Math.pow(bucketColors[i].g - bucketColors[j].g, 2) +
-                           Math.pow(bucketColors[i].b - bucketColors[j].b, 2);
+                const dr = bucketColors[i].r - bucketColors[j].r;
+                const dg = bucketColors[i].g - bucketColors[j].g;
+                const db = bucketColors[i].b - bucketColors[j].b;
+                const dist = dr * dr + dg * dg + db * db;
                 if (dist < minDist) {
                     minDist = dist;
                     mergeIdx1 = i;
@@ -508,79 +373,79 @@ function quantizeColors(colors, maxColors) {
             }
         }
         
-        // Merge the two closest colors (weighted by count)
-        const totalCount = bucketColors[mergeIdx1].count + bucketColors[mergeIdx2].count;
+        const c1 = bucketColors[mergeIdx1];
+        const c2 = bucketColors[mergeIdx2];
+        const totalCount = c1.count + c2.count;
         bucketColors[mergeIdx1] = {
-            r: Math.round((bucketColors[mergeIdx1].r * bucketColors[mergeIdx1].count + 
-                          bucketColors[mergeIdx2].r * bucketColors[mergeIdx2].count) / totalCount),
-            g: Math.round((bucketColors[mergeIdx1].g * bucketColors[mergeIdx1].count + 
-                          bucketColors[mergeIdx2].g * bucketColors[mergeIdx2].count) / totalCount),
-            b: Math.round((bucketColors[mergeIdx1].b * bucketColors[mergeIdx1].count + 
-                          bucketColors[mergeIdx2].b * bucketColors[mergeIdx2].count) / totalCount),
+            r: Math.round((c1.r * c1.count + c2.r * c2.count) / totalCount),
+            g: Math.round((c1.g * c1.count + c2.g * c2.count) / totalCount),
+            b: Math.round((c1.b * c1.count + c2.b * c2.count) / totalCount),
             count: totalCount
         };
-        
         bucketColors.splice(mergeIdx2, 1);
     }
     
-    // If we have fewer than maxColors, add evenly spaced colors
-    while (bucketColors.length < maxColors) {
-        // Add colors that are different from existing ones
-        const existingColors = bucketColors.map(c => ({ r: c.r, g: c.g, b: c.b }));
+    // Add colors if needed (optimized)
+    if (bucketColors.length < maxColors) {
+        const existing = bucketColors.length;
+        const sampleSize = Math.min(50, colors.length);
         
-        // Try to find a color that's far from all existing ones
-        let bestColor = null;
-        let maxMinDist = -1;
-        
-        // Sample from the original colors
-        for (let i = 0; i < Math.min(100, colors.length); i++) {
-            const candidate = colors[Math.floor(Math.random() * colors.length)];
-            let minDist = Infinity;
+        for (let needed = bucketColors.length; needed < maxColors; needed++) {
+            let bestColor = null;
+            let maxMinDist = -1;
             
-            existingColors.forEach(existing => {
-                const dist = Math.pow(candidate.r - existing.r, 2) +
-                           Math.pow(candidate.g - existing.g, 2) +
-                           Math.pow(candidate.b - existing.b, 2);
-                if (dist < minDist) minDist = dist;
-            });
-            
-            if (minDist > maxMinDist) {
-                maxMinDist = minDist;
-                bestColor = candidate;
+            for (let i = 0; i < sampleSize; i++) {
+                const candidate = colors[Math.floor(Math.random() * colors.length)];
+                let minDist = Infinity;
+                
+                for (let j = 0; j < bucketColors.length; j++) {
+                    const dr = candidate.r - bucketColors[j].r;
+                    const dg = candidate.g - bucketColors[j].g;
+                    const db = candidate.b - bucketColors[j].b;
+                    const dist = dr * dr + dg * dg + db * db;
+                    if (dist < minDist) minDist = dist;
+                }
+                
+                if (minDist > maxMinDist) {
+                    maxMinDist = minDist;
+                    bestColor = candidate;
+                }
             }
-        }
-        
-        if (bestColor) {
-            bucketColors.push({ r: bestColor.r, g: bestColor.g, b: bestColor.b, count: 1 });
-        } else {
-            // Fallback: add evenly spaced colors in the color space
-            const step = bucketColors.length;
-            bucketColors.push({
-                r: Math.floor(minR + (step * rangeR) / maxColors),
-                g: Math.floor(minG + (step * rangeG) / maxColors),
-                b: Math.floor(minB + (step * rangeB) / maxColors),
-                count: 1
-            });
+            
+            if (bestColor) {
+                bucketColors.push({ r: bestColor.r, g: bestColor.g, b: bestColor.b, count: 1 });
+            } else {
+                const step = needed - existing;
+                bucketColors.push({
+                    r: Math.floor(minR + (step * rangeR) / maxColors),
+                    g: Math.floor(minG + (step * rangeG) / maxColors),
+                    b: Math.floor(minB + (step * rangeB) / maxColors),
+                    count: 1
+                });
+            }
         }
     }
     
-    // Return exactly maxColors colors (remove count property)
     return bucketColors.slice(0, maxColors).map(c => ({ r: c.r, g: c.g, b: c.b }));
 }
 
 function findNearestColor(color, palette) {
+    if (!palette || palette.length === 0) return { r: 0, g: 0, b: 0 };
+    
     let minDist = Infinity;
     let nearest = palette[0];
     
-    palette.forEach(paletteColor => {
-        const dist = Math.pow(color.r - paletteColor.r, 2) +
-                   Math.pow(color.g - paletteColor.g, 2) +
-                   Math.pow(color.b - paletteColor.b, 2);
+    for (let i = 0; i < palette.length; i++) {
+        const p = palette[i];
+        const dr = color.r - p.r;
+        const dg = color.g - p.g;
+        const db = color.b - p.b;
+        const dist = dr * dr + dg * dg + db * db;
         if (dist < minDist) {
             minDist = dist;
-            nearest = paletteColor;
+            nearest = p;
         }
-    });
+    }
     
     return nearest;
 }
@@ -591,35 +456,36 @@ function generateGrid() {
     // Calculate grid dimensions
     gridRows = calculateGridRows(gridCols, currentImage.width, currentImage.height);
 
-    // Scale image to grid size for efficient sampling (with zoom and offset applied)
+    // Scale image to grid size
     scaledImageData = scaleImageToGrid(currentImage, gridCols, gridRows, imageScale, offsetX, offsetY);
     
-    // Collect all colors from scaled image
-    const colors = [];
+    // Collect colors (optimized loop)
     const data = scaledImageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-        colors.push({
-            r: data[i],
-            g: data[i + 1],
-            b: data[i + 2]
-        });
+    const colorCount = data.length / 4;
+    const colors = new Array(colorCount);
+    for (let i = 0; i < colorCount; i++) {
+        const idx = i * 4;
+        colors[i] = {
+            r: data[idx],
+            g: data[idx + 1],
+            b: data[idx + 2]
+        };
     }
 
-    // Quantize colors to maxColors palette
+    // Quantize colors
     const colorPalette = quantizeColors(colors, maxColors);
 
-    // Set canvas size (each cell is 30px)
-    const cellSize = 30;
-    const canvasWidth = gridCols * cellSize;
-    const canvasHeight = gridRows * cellSize;
+    // Set canvas size
+    const canvasWidth = gridCols * CELL_SIZE;
+    const canvasHeight = gridRows * CELL_SIZE;
 
     gridCanvas.width = canvasWidth;
     gridCanvas.height = canvasHeight;
 
-    // Clear canvas
+    // Clear and draw grid
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    // Generate grid cells using quantized colors
+    // Draw all cells (optimized)
     for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
             const idx = (row * gridCols + col) * 4;
@@ -628,73 +494,61 @@ function generateGrid() {
                 g: data[idx + 1],
                 b: data[idx + 2]
             };
-
-            // Find nearest color in palette
             const color = findNearestColor(originalColor, colorPalette);
+            const x = col * CELL_SIZE;
+            const y = row * CELL_SIZE;
 
-            // Draw cell
-            const x = col * cellSize;
-            const y = row * cellSize;
+            ctx.fillStyle = `rgb(${color.r},${color.g},${color.b})`;
+            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
 
-            ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
-            ctx.fillRect(x, y, cellSize, cellSize);
-
-            // Draw grid line if enabled
             if (showGridLines) {
-                ctx.strokeStyle = 'rgba(255, 107, 157, 0.2)';
+                ctx.strokeStyle = GRID_COLORS.LINE;
                 ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, cellSize, cellSize);
+                ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
             }
         }
     }
 
-    // Scale view to fit in viewport
-    scaleView(cellSize);
+    // Scale view and generate labels
+    scaleView(CELL_SIZE);
+    generateLabels(CELL_SIZE);
 
-    // Generate labels
-    generateLabels(cellSize);
-
-    // Update resolution text
+    // Update UI
     resolutionText.textContent = `Grid: ${gridCols} × ${gridRows}`;
-
-    // Show grid container, hide empty state
     emptyState.style.display = 'none';
     gridContainer.style.display = 'block';
     downloadBtn.disabled = false;
+    shareBtn.disabled = false;
 }
 
 function scaleView(cellSize) {
     const canvasWidth = gridCols * cellSize;
     const canvasHeight = gridRows * cellSize;
-    const totalWidth = canvasWidth + 50; // +50 for row labels
-    const totalHeight = canvasHeight + 35; // +35 for column labels + margin
     
-    // Get available space in preview panel
-    const previewPanel = document.querySelector('.preview-panel');
-    const maxWidth = previewPanel.clientWidth - 60; // padding
-    const maxHeight = Math.max(window.innerHeight - 350, 400); // minimum 400px height
+    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+    const labelWidth = isMobile ? LABEL_WIDTH_MOBILE : LABEL_WIDTH;
+    const labelHeight = isMobile ? LABEL_HEIGHT_MOBILE : LABEL_HEIGHT;
     
-    // Calculate scale to fit (don't scale up, only down)
+    const totalWidth = canvasWidth + labelWidth;
+    const totalHeight = canvasHeight + labelHeight + 5;
+    
+    const panelPadding = isMobile ? 20 : 60;
+    const maxWidth = previewPanel.clientWidth - panelPadding;
+    const headerHeight = isMobile ? 200 : 350;
+    const maxHeight = Math.max(window.innerHeight - headerHeight, isMobile ? 300 : 400);
+    
     const scaleX = maxWidth / totalWidth;
     const scaleY = maxHeight / totalHeight;
     const scale = Math.min(scaleX, scaleY, 1);
     
-    const gridWrapper = document.querySelector('.grid-wrapper');
-    
     if (scale < 1) {
-        // Scale the entire wrapper
         gridWrapper.style.transform = `scale(${scale})`;
         gridWrapper.style.transformOrigin = 'top left';
-        
-        // Set wrapper to actual size, transform will scale it visually
         gridWrapper.style.width = `${totalWidth}px`;
         gridWrapper.style.height = `${totalHeight}px`;
-        
-        // Container needs to account for scaled dimensions to prevent overflow
         gridContainer.style.width = `${totalWidth * scale}px`;
         gridContainer.style.height = `${totalHeight * scale}px`;
     } else {
-        // Reset scaling when no scaling needed
         gridWrapper.style.transform = '';
         gridWrapper.style.transformOrigin = '';
         gridWrapper.style.width = '';
@@ -705,35 +559,185 @@ function scaleView(cellSize) {
 }
 
 function generateLabels(cellSize) {
-    // Clear existing labels
+    // Clear and regenerate
     rowLabels.innerHTML = '';
     columnLabels.innerHTML = '';
 
-    // Generate column labels (1-indexed)
+    // Use DocumentFragment for better performance
+    const colFragment = document.createDocumentFragment();
+    const rowFragment = document.createDocumentFragment();
+
     for (let col = 0; col < gridCols; col++) {
         const label = document.createElement('div');
         label.className = 'column-label';
         label.textContent = col + 1;
         label.style.width = `${cellSize}px`;
-        columnLabels.appendChild(label);
+        colFragment.appendChild(label);
     }
 
-    // Generate row labels (1-indexed)
     for (let row = 0; row < gridRows; row++) {
         const label = document.createElement('div');
         label.className = 'row-label';
         label.textContent = row + 1;
         label.style.height = `${cellSize}px`;
-        rowLabels.appendChild(label);
+        rowFragment.appendChild(label);
+    }
+
+    columnLabels.appendChild(colFragment);
+    rowLabels.appendChild(rowFragment);
+}
+
+function handleAdvancedToggle() {
+    const isExpanded = advancedContent.style.display !== 'none';
+    advancedContent.style.display = isExpanded ? 'none' : 'block';
+    advancedSection.classList.toggle('expanded', !isExpanded);
+}
+
+function handleShare() {
+    if (!currentImage || !originalImageDataURL) return;
+
+    try {
+        const params = new URLSearchParams();
+        params.set('cols', gridCols.toString());
+        params.set('maxColors', maxColors.toString());
+        params.set('scale', imageScale.toString());
+        params.set('offsetX', offsetX.toString());
+        params.set('offsetY', offsetY.toString());
+        params.set('gridLines', showGridLines ? '1' : '0');
+        
+        const baseURL = window.location.origin + window.location.pathname;
+        const shareURL = new URL(baseURL);
+        shareURL.search = params.toString();
+        shareURL.hash = encodeURIComponent(originalImageDataURL);
+        
+        const urlString = shareURL.toString();
+        
+        if (urlString.length > 6000) {
+            alert('The image is too large to share via URL. Please try a smaller image or download it instead.');
+            return;
+        }
+        
+        navigator.clipboard.writeText(urlString).then(() => {
+            const originalText = shareBtn.textContent;
+            shareBtn.textContent = 'Copied!';
+            shareBtn.style.background = 'linear-gradient(135deg, #6bff9d 0%, #8fff8f 100%)';
+            
+            setTimeout(() => {
+                shareBtn.textContent = originalText;
+                shareBtn.style.background = '';
+            }, 2000);
+        }).catch(() => {
+            prompt('Copy this URL to share:', urlString);
+        });
+    } catch (error) {
+        console.error('Error generating share URL:', error);
+        alert('Error generating share URL. Please try again.');
+    }
+}
+
+function loadFromURL() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const hash = window.location.hash.substring(1);
+        
+        if (!urlParams.has('cols') || !hash) return;
+        
+        const imageDataURL = decodeURIComponent(hash);
+        if (!imageDataURL.startsWith('data:image')) return;
+        
+        const img = new Image();
+        img.onload = () => {
+            currentImage = img;
+            originalImageDataURL = imageDataURL;
+            
+            gridCols = parseInt(urlParams.get('cols'), 10) || 10;
+            maxColors = parseInt(urlParams.get('maxColors'), 10) || 3;
+            imageScale = parseInt(urlParams.get('scale'), 10) || 100;
+            offsetX = parseInt(urlParams.get('offsetX'), 10) || 0;
+            offsetY = parseInt(urlParams.get('offsetY'), 10) || 0;
+            showGridLines = urlParams.get('gridLines') === '1';
+            
+            // Update UI
+            gridSizeSlider.value = gridCols;
+            gridSizeInput.value = gridCols;
+            maxColorsSlider.value = maxColors;
+            maxColorsInput.value = maxColors;
+            imageScaleSlider.value = imageScale;
+            imageScaleInput.value = imageScale;
+            offsetXSlider.value = offsetX;
+            offsetXInput.value = offsetX;
+            offsetYSlider.value = offsetY;
+            offsetYInput.value = offsetY;
+            showGridLinesCheckbox.checked = showGridLines;
+            
+            generateGrid();
+            fileInfo.textContent = 'Shared image';
+        };
+        
+        img.onerror = () => {
+            console.error('Error loading shared image');
+            fileInfo.textContent = 'Error loading shared image';
+        };
+        
+        img.src = imageDataURL;
+    } catch (error) {
+        console.error('Error loading from URL:', error);
     }
 }
 
 function handleDownload() {
-    if (!gridCanvas) return;
+    if (!gridCanvas || !currentImage) return;
 
-    // Create a link element
+    const labelWidth = LABEL_WIDTH;
+    const labelHeight = LABEL_HEIGHT;
+    
+    const downloadCanvas = document.createElement('canvas');
+    downloadCanvas.width = gridCanvas.width + labelWidth;
+    downloadCanvas.height = gridCanvas.height + labelHeight;
+    const downloadCtx = downloadCanvas.getContext('2d');
+    
+    // White background
+    downloadCtx.fillStyle = 'white';
+    downloadCtx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
+    
+    // Setup font
+    downloadCtx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    downloadCtx.textAlign = 'center';
+    downloadCtx.textBaseline = 'middle';
+    
+    // Draw column labels
+    const bgColor = GRID_COLORS.BACKGROUND;
+    const textColor = GRID_COLORS.TEXT;
+    
+    for (let col = 0; col < gridCols; col++) {
+        const x = labelWidth + col * CELL_SIZE + CELL_SIZE / 2;
+        const y = labelHeight / 2;
+        
+        downloadCtx.fillStyle = bgColor;
+        downloadCtx.fillRect(labelWidth + col * CELL_SIZE, 0, CELL_SIZE, labelHeight);
+        
+        downloadCtx.fillStyle = textColor;
+        downloadCtx.fillText((col + 1).toString(), x, y);
+    }
+    
+    // Draw row labels
+    for (let row = 0; row < gridRows; row++) {
+        const x = labelWidth / 2;
+        const y = labelHeight + row * CELL_SIZE + CELL_SIZE / 2;
+        
+        downloadCtx.fillStyle = bgColor;
+        downloadCtx.fillRect(0, labelHeight + row * CELL_SIZE, labelWidth, CELL_SIZE);
+        
+        downloadCtx.fillStyle = textColor;
+        downloadCtx.fillText((row + 1).toString(), x, y);
+    }
+    
+    // Draw grid canvas
+    downloadCtx.drawImage(gridCanvas, labelWidth, labelHeight);
+    
+    // Download
     const link = document.createElement('a');
     link.download = 'pikcelgrid-output.png';
-    link.href = gridCanvas.toDataURL('image/png');
+    link.href = downloadCanvas.toDataURL('image/png');
     link.click();
 }
