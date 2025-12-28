@@ -65,11 +65,11 @@ function debounceGenerateGrid() {
 }
 
 // Generic input handler factory to reduce code duplication
-function createInputHandler(stateKey, slider, input, onChange) {
+function createInputHandler(setState, slider, input, onChange) {
     return {
         sliderChange: (e) => {
             const value = parseInt(e.target.value, 10);
-            window[stateKey] = value;
+            setState(value);
             input.value = value;
             if (currentImage) onChange();
         },
@@ -81,7 +81,7 @@ function createInputHandler(stateKey, slider, input, onChange) {
             if (isNaN(value)) return;
             value = Math.max(min, Math.min(max, value));
             
-            window[stateKey] = value;
+            setState(value);
             slider.value = value;
             e.target.value = value;
             
@@ -95,7 +95,7 @@ function createInputHandler(stateKey, slider, input, onChange) {
             if (isNaN(value) || value < min) value = min;
             else if (value > max) value = max;
             
-            window[stateKey] = value;
+            setState(value);
             slider.value = value;
             e.target.value = value;
             
@@ -104,12 +104,27 @@ function createInputHandler(stateKey, slider, input, onChange) {
     };
 }
 
-// Initialize input handlers
-const gridSizeHandler = createInputHandler('gridCols', gridSizeSlider, gridSizeInput, debounceGenerateGrid);
-const maxColorsHandler = createInputHandler('maxColors', maxColorsSlider, maxColorsInput, debounceGenerateGrid);
-const imageScaleHandler = createInputHandler('imageScale', imageScaleSlider, imageScaleInput, debounceGenerateGrid);
-const offsetXHandler = createInputHandler('offsetX', offsetXSlider, offsetXInput, debounceGenerateGrid);
-const offsetYHandler = createInputHandler('offsetY', offsetYSlider, offsetYInput, debounceGenerateGrid);
+// Initialize input handlers with proper state setters
+const gridSizeHandler = createInputHandler(
+    (v) => { gridCols = v; },
+    gridSizeSlider, gridSizeInput, debounceGenerateGrid
+);
+const maxColorsHandler = createInputHandler(
+    (v) => { maxColors = v; },
+    maxColorsSlider, maxColorsInput, debounceGenerateGrid
+);
+const imageScaleHandler = createInputHandler(
+    (v) => { imageScale = v; },
+    imageScaleSlider, imageScaleInput, debounceGenerateGrid
+);
+const offsetXHandler = createInputHandler(
+    (v) => { offsetX = v; },
+    offsetXSlider, offsetXInput, debounceGenerateGrid
+);
+const offsetYHandler = createInputHandler(
+    (v) => { offsetY = v; },
+    offsetYSlider, offsetYInput, debounceGenerateGrid
+);
 
 // Event listeners
 imageUpload.addEventListener('change', handleImageUpload);

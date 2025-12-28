@@ -147,9 +147,13 @@ body {
         font-size: 0.9rem;
     }
 
-    .download-btn, .share-btn {
+    .share-btn, .download-btn {
         padding: 14px;
         font-size: 0.95rem;
+    }
+
+    .button-group {
+        box-shadow: 0 4px 12px rgba(255, 107, 157, 0.3);
     }
 
     .footer {
@@ -495,23 +499,52 @@ body {
     margin-bottom: 0;
 }
 
+.button-group {
+    display: flex;
+    gap: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(255, 107, 157, 0.3);
+    background: white;
+}
+
 .share-btn, .download-btn {
-    width: 100%;
+    flex: 1;
     padding: 12px;
-    background: linear-gradient(135deg, #ff6b9d 0%, #ff8fb3 100%);
     color: white;
     border: none;
-    border-radius: 10px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(255, 107, 157, 0.3);
-    margin-bottom: 10px;
+    position: relative;
+}
+
+.share-btn {
+    background: linear-gradient(135deg, #8fb3ff 0%, #6b9dff 100%);
+}
+
+.share-btn::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 60%;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.download-btn {
+    background: linear-gradient(135deg, #ff6b9d 0%, #ff8fb3 100%);
 }
 
 .share-btn:hover:not(:disabled), .download-btn:hover:not(:disabled) {
     transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.button-group:hover {
     box-shadow: 0 6px 20px rgba(255, 107, 157, 0.4);
 }
 
@@ -524,24 +557,15 @@ body {
     cursor: not-allowed;
 }
 
-.download-btn {
-    margin-bottom: 0;
+.share-btn:disabled:hover, .download-btn:disabled:hover {
+    transform: none;
+    filter: none;
 }
 
 /* Touch-friendly button styles */
 button, .upload-label {
     -webkit-tap-highlight-color: rgba(255, 107, 157, 0.3);
     touch-action: manipulation; /* Improve touch responsiveness */
-}
-
-.share-btn {
-    background: linear-gradient(135deg, #8fb3ff 0%, #6b9dff 100%);
-    box-shadow: 0 4px 15px rgba(107, 157, 255, 0.3);
-}
-
-.share-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #7aa0ff 0%, #5a8aff 100%);
-    box-shadow: 0 6px 20px rgba(107, 157, 255, 0.4);
 }
 
 .preview-panel {
