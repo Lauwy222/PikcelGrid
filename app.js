@@ -6,6 +6,7 @@ let gridCols = 10;
 let gridRows = 1;
 let showGridLines = true;
 let maxColors = 3;
+let imageScale = 100;
 
 // DOM Elements
 const imageUpload = document.getElementById('imageUpload');
@@ -13,6 +14,8 @@ const gridSizeSlider = document.getElementById('gridSize');
 const gridSizeInput = document.getElementById('gridSizeInput');
 const maxColorsSlider = document.getElementById('maxColors');
 const maxColorsInput = document.getElementById('maxColorsInput');
+const imageScaleSlider = document.getElementById('imageScale');
+const imageScaleInput = document.getElementById('imageScaleInput');
 const fileInfo = document.getElementById('fileInfo');
 const emptyState = document.getElementById('emptyState');
 const gridContainer = document.getElementById('gridContainer');
@@ -34,6 +37,9 @@ gridSizeInput.addEventListener('blur', handleGridSizeInputBlur);
 maxColorsSlider.addEventListener('input', handleMaxColorsSliderChange);
 maxColorsInput.addEventListener('input', handleMaxColorsInputChange);
 maxColorsInput.addEventListener('blur', handleMaxColorsInputBlur);
+imageScaleSlider.addEventListener('input', handleImageScaleSliderChange);
+imageScaleInput.addEventListener('input', handleImageScaleInputChange);
+imageScaleInput.addEventListener('blur', handleImageScaleInputBlur);
 showGridLinesCheckbox.addEventListener('change', handleGridLinesToggle);
 downloadBtn.addEventListener('click', handleDownload);
 
@@ -164,6 +170,54 @@ function handleMaxColorsInputBlur(e) {
     }
 }
 
+function handleImageScaleSliderChange(e) {
+    const value = parseInt(e.target.value);
+    imageScale = value;
+    imageScaleInput.value = value;
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleImageScaleInputChange(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(imageScaleSlider.min);
+    const max = parseInt(imageScaleSlider.max);
+    
+    if (isNaN(value)) return;
+    
+    // Clamp value to min/max
+    value = Math.max(min, Math.min(max, value));
+    
+    imageScale = value;
+    imageScaleSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleImageScaleInputBlur(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(imageScaleSlider.min);
+    const max = parseInt(imageScaleSlider.max);
+    
+    if (isNaN(value) || value < min) {
+        value = min;
+    } else if (value > max) {
+        value = max;
+    }
+    
+    imageScale = value;
+    imageScaleSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
 function handleGridLinesToggle(e) {
     showGridLines = e.target.checked;
     if (currentImage) {
@@ -177,17 +231,42 @@ function calculateGridRows(cols, imgWidth, imgHeight) {
     return rows;
 }
 
-function scaleImageToGrid(img, cols, rows) {
+function scaleImageToGrid(img, cols, rows, scalePercent) {
     // Create a canvas scaled to grid dimensions
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = cols;
     tempCanvas.height = rows;
     const tempCtx = tempCanvas.getContext('2d');
     
-    // Use high-quality scaling
-    tempCtx.imageSmoothingEnabled = true;
-    tempCtx.imageSmoothingQuality = 'high';
-    tempCtx.drawImage(img, 0, 0, cols, rows);
+    // Calculate zoom: scale > 100 means zoom in (crop from center)
+    // scale = 100 means full image, scale = 120 means crop to 100/120 of image from center
+    const scaleFactor = scalePercent / 100;
+    
+    if (scaleFactor === 1) {
+        // No zoom, use full image
+        tempCtx.imageSmoothingEnabled = true;
+        tempCtx.imageSmoothingQuality = 'high';
+        tempCtx.drawImage(img, 0, 0, cols, rows);
+    } else if (scaleFactor > 1) {
+        // Zoom in: crop from center
+        const sourceWidth = img.width / scaleFactor;
+        const sourceHeight = img.height / scaleFactor;
+        const sourceX = (img.width - sourceWidth) / 2;
+        const sourceY = (img.height - sourceHeight) / 2;
+        
+        tempCtx.imageSmoothingEnabled = true;
+        tempCtx.imageSmoothingQuality = 'high';
+        tempCtx.drawImage(
+            img,
+            sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (cropped from center)
+            0, 0, cols, rows  // Destination rectangle (full canvas)
+        );
+    } else {
+        // Zoom out: scale down (this case is less common but supported)
+        tempCtx.imageSmoothingEnabled = true;
+        tempCtx.imageSmoothingQuality = 'high';
+        tempCtx.drawImage(img, 0, 0, cols, rows);
+    }
     
     return tempCtx.getImageData(0, 0, cols, rows);
 }
@@ -265,8 +344,8 @@ function generateGrid() {
     // Calculate grid dimensions
     gridRows = calculateGridRows(gridCols, currentImage.width, currentImage.height);
 
-    // Scale image to grid size for efficient sampling
-    scaledImageData = scaleImageToGrid(currentImage, gridCols, gridRows);
+    // Scale image to grid size for efficient sampling (with zoom applied)
+    scaledImageData = scaleImageToGrid(currentImage, gridCols, gridRows, imageScale);
     
     // Collect all colors from scaled image
     const colors = [];
