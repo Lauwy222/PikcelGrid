@@ -55,6 +55,26 @@
                 </div>
 
                 <div class="control-group">
+                    <label for="offsetX" class="slider-label">
+                        <span>Offset X (%):</span>
+                    </label>
+                    <div class="slider-input-group">
+                        <input type="range" id="offsetX" min="-50" max="50" value="0" class="slider">
+                        <input type="number" id="offsetXInput" min="-50" max="50" value="0" class="number-input">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="offsetY" class="slider-label">
+                        <span>Offset Y (%):</span>
+                    </label>
+                    <div class="slider-input-group">
+                        <input type="range" id="offsetY" min="-50" max="50" value="0" class="slider">
+                        <input type="number" id="offsetYInput" min="-50" max="50" value="0" class="number-input">
+                    </div>
+                </div>
+
+                <div class="control-group">
                     <div class="resolution-info">
                         <span id="resolutionText">Grid: - × -</span>
                     </div>
@@ -89,6 +109,10 @@
                 </div>
             </div>
         </main>
+
+        <footer class="footer">
+            <p class="footer-text">Built to belong to you. From Laurens to Linouk</p>
+        </footer>
     </div>
 
     <script src="app.js"></script>

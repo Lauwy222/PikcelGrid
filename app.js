@@ -7,6 +7,8 @@ let gridRows = 1;
 let showGridLines = true;
 let maxColors = 3;
 let imageScale = 100;
+let offsetX = 0;
+let offsetY = 0;
 
 // DOM Elements
 const imageUpload = document.getElementById('imageUpload');
@@ -16,6 +18,10 @@ const maxColorsSlider = document.getElementById('maxColors');
 const maxColorsInput = document.getElementById('maxColorsInput');
 const imageScaleSlider = document.getElementById('imageScale');
 const imageScaleInput = document.getElementById('imageScaleInput');
+const offsetXSlider = document.getElementById('offsetX');
+const offsetXInput = document.getElementById('offsetXInput');
+const offsetYSlider = document.getElementById('offsetY');
+const offsetYInput = document.getElementById('offsetYInput');
 const fileInfo = document.getElementById('fileInfo');
 const emptyState = document.getElementById('emptyState');
 const gridContainer = document.getElementById('gridContainer');
@@ -40,6 +46,12 @@ maxColorsInput.addEventListener('blur', handleMaxColorsInputBlur);
 imageScaleSlider.addEventListener('input', handleImageScaleSliderChange);
 imageScaleInput.addEventListener('input', handleImageScaleInputChange);
 imageScaleInput.addEventListener('blur', handleImageScaleInputBlur);
+offsetXSlider.addEventListener('input', handleOffsetXSliderChange);
+offsetXInput.addEventListener('input', handleOffsetXInputChange);
+offsetXInput.addEventListener('blur', handleOffsetXInputBlur);
+offsetYSlider.addEventListener('input', handleOffsetYSliderChange);
+offsetYInput.addEventListener('input', handleOffsetYInputChange);
+offsetYInput.addEventListener('blur', handleOffsetYInputBlur);
 showGridLinesCheckbox.addEventListener('change', handleGridLinesToggle);
 downloadBtn.addEventListener('click', handleDownload);
 
@@ -218,6 +230,102 @@ function handleImageScaleInputBlur(e) {
     }
 }
 
+function handleOffsetXSliderChange(e) {
+    const value = parseInt(e.target.value);
+    offsetX = value;
+    offsetXInput.value = value;
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleOffsetXInputChange(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(offsetXSlider.min);
+    const max = parseInt(offsetXSlider.max);
+    
+    if (isNaN(value)) return;
+    
+    // Clamp value to min/max
+    value = Math.max(min, Math.min(max, value));
+    
+    offsetX = value;
+    offsetXSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleOffsetXInputBlur(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(offsetXSlider.min);
+    const max = parseInt(offsetXSlider.max);
+    
+    if (isNaN(value) || value < min) {
+        value = min;
+    } else if (value > max) {
+        value = max;
+    }
+    
+    offsetX = value;
+    offsetXSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleOffsetYSliderChange(e) {
+    const value = parseInt(e.target.value);
+    offsetY = value;
+    offsetYInput.value = value;
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleOffsetYInputChange(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(offsetYSlider.min);
+    const max = parseInt(offsetYSlider.max);
+    
+    if (isNaN(value)) return;
+    
+    // Clamp value to min/max
+    value = Math.max(min, Math.min(max, value));
+    
+    offsetY = value;
+    offsetYSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
+function handleOffsetYInputBlur(e) {
+    let value = parseInt(e.target.value);
+    const min = parseInt(offsetYSlider.min);
+    const max = parseInt(offsetYSlider.max);
+    
+    if (isNaN(value) || value < min) {
+        value = min;
+    } else if (value > max) {
+        value = max;
+    }
+    
+    offsetY = value;
+    offsetYSlider.value = value;
+    e.target.value = value;
+    
+    if (currentImage) {
+        generateGrid();
+    }
+}
+
 function handleGridLinesToggle(e) {
     showGridLines = e.target.checked;
     if (currentImage) {
@@ -231,7 +339,7 @@ function calculateGridRows(cols, imgWidth, imgHeight) {
     return rows;
 }
 
-function scaleImageToGrid(img, cols, rows, scalePercent) {
+function scaleImageToGrid(img, cols, rows, scalePercent, offsetXPercent, offsetYPercent) {
     // Create a canvas scaled to grid dimensions
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = cols;
@@ -243,22 +351,52 @@ function scaleImageToGrid(img, cols, rows, scalePercent) {
     const scaleFactor = scalePercent / 100;
     
     if (scaleFactor === 1) {
-        // No zoom, use full image
-        tempCtx.imageSmoothingEnabled = true;
-        tempCtx.imageSmoothingQuality = 'high';
-        tempCtx.drawImage(img, 0, 0, cols, rows);
+        // No zoom, use full image (but still apply offset if any)
+        if (offsetXPercent === 0 && offsetYPercent === 0) {
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
+            tempCtx.drawImage(img, 0, 0, cols, rows);
+        } else {
+            // Apply offset even at 100% scale
+            const offsetX = (offsetXPercent / 100) * img.width;
+            const offsetY = (offsetYPercent / 100) * img.height;
+            const sourceX = Math.max(0, Math.min(img.width - cols, offsetX));
+            const sourceY = Math.max(0, Math.min(img.height - rows, offsetY));
+            const sourceWidth = Math.min(cols, img.width - sourceX);
+            const sourceHeight = Math.min(rows, img.height - sourceY);
+            
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
+            tempCtx.drawImage(
+                img,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                0, 0, sourceWidth, sourceHeight
+            );
+        }
     } else if (scaleFactor > 1) {
-        // Zoom in: crop from center
+        // Zoom in: crop with offset applied
         const sourceWidth = img.width / scaleFactor;
         const sourceHeight = img.height / scaleFactor;
-        const sourceX = (img.width - sourceWidth) / 2;
-        const sourceY = (img.height - sourceHeight) / 2;
+        
+        // Calculate center position, then apply offset
+        let sourceX = (img.width - sourceWidth) / 2;
+        let sourceY = (img.height - sourceHeight) / 2;
+        
+        // Apply offset (as percentage of the available movement range)
+        const maxOffsetX = (img.width - sourceWidth) / 2;
+        const maxOffsetY = (img.height - sourceHeight) / 2;
+        sourceX += (offsetXPercent / 100) * maxOffsetX * 2;
+        sourceY += (offsetYPercent / 100) * maxOffsetY * 2;
+        
+        // Clamp to image boundaries
+        sourceX = Math.max(0, Math.min(img.width - sourceWidth, sourceX));
+        sourceY = Math.max(0, Math.min(img.height - sourceHeight, sourceY));
         
         tempCtx.imageSmoothingEnabled = true;
         tempCtx.imageSmoothingQuality = 'high';
         tempCtx.drawImage(
             img,
-            sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (cropped from center)
+            sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (cropped with offset)
             0, 0, cols, rows  // Destination rectangle (full canvas)
         );
     } else {
@@ -272,53 +410,162 @@ function scaleImageToGrid(img, cols, rows, scalePercent) {
 }
 
 function quantizeColors(colors, maxColors) {
-    if (colors.length <= maxColors) return colors;
-
-    // Simple k-means clustering for color quantization
-    // Initialize centroids with evenly distributed colors
-    const centroids = [];
-    for (let i = 0; i < maxColors; i++) {
-        const idx = Math.floor((i / maxColors) * colors.length);
-        centroids.push({ r: colors[idx].r, g: colors[idx].g, b: colors[idx].b });
+    if (colors.length === 0) return [];
+    if (maxColors <= 1) {
+        // Return average color if maxColors is 1
+        const avg = colors.reduce((acc, c) => {
+            acc.r += c.r;
+            acc.g += c.g;
+            acc.b += c.b;
+            return acc;
+        }, { r: 0, g: 0, b: 0 });
+        return [{
+            r: Math.round(avg.r / colors.length),
+            g: Math.round(avg.g / colors.length),
+            b: Math.round(avg.b / colors.length)
+        }];
     }
 
-    // K-means iteration (simplified, fixed iterations)
-    for (let iter = 0; iter < 10; iter++) {
-        const clusters = Array(maxColors).fill().map(() => []);
+    // Use a threshold/contrast-based approach: cluster colors by similarity
+    // This guarantees we get exactly maxColors distinct colors
+    
+    // Calculate color ranges in the image
+    let minR = 255, maxR = 0;
+    let minG = 255, maxG = 0;
+    let minB = 255, maxB = 0;
+    
+    colors.forEach(color => {
+        minR = Math.min(minR, color.r);
+        maxR = Math.max(maxR, color.r);
+        minG = Math.min(minG, color.g);
+        maxG = Math.max(maxG, color.g);
+        minB = Math.min(minB, color.b);
+        maxB = Math.max(maxB, color.b);
+    });
+    
+    const rangeR = maxR - minR || 255;
+    const rangeG = maxG - minG || 255;
+    const rangeB = maxB - minB || 255;
+    
+    // Create buckets based on maxColors
+    // Use a 3D grid approach: divide each channel into bins
+    const binsPerChannel = Math.ceil(Math.pow(maxColors, 1/3));
+    const binSizeR = Math.max(1, rangeR / binsPerChannel);
+    const binSizeG = Math.max(1, rangeG / binsPerChannel);
+    const binSizeB = Math.max(1, rangeB / binsPerChannel);
+    
+    // Create buckets and collect colors
+    const buckets = new Map();
+    
+    colors.forEach(color => {
+        const binR = Math.min(binsPerChannel - 1, Math.floor((color.r - minR) / binSizeR));
+        const binG = Math.min(binsPerChannel - 1, Math.floor((color.g - minG) / binSizeG));
+        const binB = Math.min(binsPerChannel - 1, Math.floor((color.b - minB) / binSizeB));
+        const key = `${binR},${binG},${binB}`;
         
-        // Assign colors to nearest centroid
-        colors.forEach(color => {
-            let minDist = Infinity;
-            let nearestIdx = 0;
-            centroids.forEach((centroid, idx) => {
-                const dist = Math.pow(color.r - centroid.r, 2) +
-                           Math.pow(color.g - centroid.g, 2) +
-                           Math.pow(color.b - centroid.b, 2);
+        if (!buckets.has(key)) {
+            buckets.set(key, []);
+        }
+        buckets.get(key).push(color);
+    });
+    
+    // Calculate average color for each bucket
+    const bucketColors = Array.from(buckets.entries()).map(([key, bucketColors]) => {
+        const avg = bucketColors.reduce((acc, c) => {
+            acc.r += c.r;
+            acc.g += c.g;
+            acc.b += c.b;
+            return acc;
+        }, { r: 0, g: 0, b: 0 });
+        return {
+            r: Math.round(avg.r / bucketColors.length),
+            g: Math.round(avg.g / bucketColors.length),
+            b: Math.round(avg.b / bucketColors.length),
+            count: bucketColors.length
+        };
+    });
+    
+    // Sort by frequency (most common colors first)
+    bucketColors.sort((a, b) => b.count - a.count);
+    
+    // If we have more buckets than maxColors, merge similar ones
+    while (bucketColors.length > maxColors) {
+        // Find two most similar colors and merge them
+        let minDist = Infinity;
+        let mergeIdx1 = 0;
+        let mergeIdx2 = 1;
+        
+        for (let i = 0; i < bucketColors.length; i++) {
+            for (let j = i + 1; j < bucketColors.length; j++) {
+                const dist = Math.pow(bucketColors[i].r - bucketColors[j].r, 2) +
+                           Math.pow(bucketColors[i].g - bucketColors[j].g, 2) +
+                           Math.pow(bucketColors[i].b - bucketColors[j].b, 2);
                 if (dist < minDist) {
                     minDist = dist;
-                    nearestIdx = idx;
+                    mergeIdx1 = i;
+                    mergeIdx2 = j;
                 }
-            });
-            clusters[nearestIdx].push(color);
-        });
-
-        // Update centroids
-        centroids.forEach((centroid, idx) => {
-            if (clusters[idx].length > 0) {
-                const avg = clusters[idx].reduce((acc, color) => {
-                    acc.r += color.r;
-                    acc.g += color.g;
-                    acc.b += color.b;
-                    return acc;
-                }, { r: 0, g: 0, b: 0 });
-                centroid.r = Math.round(avg.r / clusters[idx].length);
-                centroid.g = Math.round(avg.g / clusters[idx].length);
-                centroid.b = Math.round(avg.b / clusters[idx].length);
             }
-        });
+        }
+        
+        // Merge the two closest colors (weighted by count)
+        const totalCount = bucketColors[mergeIdx1].count + bucketColors[mergeIdx2].count;
+        bucketColors[mergeIdx1] = {
+            r: Math.round((bucketColors[mergeIdx1].r * bucketColors[mergeIdx1].count + 
+                          bucketColors[mergeIdx2].r * bucketColors[mergeIdx2].count) / totalCount),
+            g: Math.round((bucketColors[mergeIdx1].g * bucketColors[mergeIdx1].count + 
+                          bucketColors[mergeIdx2].g * bucketColors[mergeIdx2].count) / totalCount),
+            b: Math.round((bucketColors[mergeIdx1].b * bucketColors[mergeIdx1].count + 
+                          bucketColors[mergeIdx2].b * bucketColors[mergeIdx2].count) / totalCount),
+            count: totalCount
+        };
+        
+        bucketColors.splice(mergeIdx2, 1);
     }
-
-    return centroids;
+    
+    // If we have fewer than maxColors, add evenly spaced colors
+    while (bucketColors.length < maxColors) {
+        // Add colors that are different from existing ones
+        const existingColors = bucketColors.map(c => ({ r: c.r, g: c.g, b: c.b }));
+        
+        // Try to find a color that's far from all existing ones
+        let bestColor = null;
+        let maxMinDist = -1;
+        
+        // Sample from the original colors
+        for (let i = 0; i < Math.min(100, colors.length); i++) {
+            const candidate = colors[Math.floor(Math.random() * colors.length)];
+            let minDist = Infinity;
+            
+            existingColors.forEach(existing => {
+                const dist = Math.pow(candidate.r - existing.r, 2) +
+                           Math.pow(candidate.g - existing.g, 2) +
+                           Math.pow(candidate.b - existing.b, 2);
+                if (dist < minDist) minDist = dist;
+            });
+            
+            if (minDist > maxMinDist) {
+                maxMinDist = minDist;
+                bestColor = candidate;
+            }
+        }
+        
+        if (bestColor) {
+            bucketColors.push({ r: bestColor.r, g: bestColor.g, b: bestColor.b, count: 1 });
+        } else {
+            // Fallback: add evenly spaced colors in the color space
+            const step = bucketColors.length;
+            bucketColors.push({
+                r: Math.floor(minR + (step * rangeR) / maxColors),
+                g: Math.floor(minG + (step * rangeG) / maxColors),
+                b: Math.floor(minB + (step * rangeB) / maxColors),
+                count: 1
+            });
+        }
+    }
+    
+    // Return exactly maxColors colors (remove count property)
+    return bucketColors.slice(0, maxColors).map(c => ({ r: c.r, g: c.g, b: c.b }));
 }
 
 function findNearestColor(color, palette) {
@@ -344,8 +591,8 @@ function generateGrid() {
     // Calculate grid dimensions
     gridRows = calculateGridRows(gridCols, currentImage.width, currentImage.height);
 
-    // Scale image to grid size for efficient sampling (with zoom applied)
-    scaledImageData = scaleImageToGrid(currentImage, gridCols, gridRows, imageScale);
+    // Scale image to grid size for efficient sampling (with zoom and offset applied)
+    scaledImageData = scaleImageToGrid(currentImage, gridCols, gridRows, imageScale, offsetX, offsetY);
     
     // Collect all colors from scaled image
     const colors = [];
