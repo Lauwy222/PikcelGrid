@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PikcelGrid - Image to Pixel Grid Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="logo">PikcelGrid</h1>
+            <p class="tagline">Transform images into pixel grids</p>
+        </header>
+
+        <main class="main-content">
+            <div class="controls-panel">
+                <div class="control-group">
+                    <label for="imageUpload" class="upload-label">
+                        <span class="upload-icon">📷</span>
+                        <span class="upload-text">Upload Image</span>
+                        <input type="file" id="imageUpload" accept="image/jpeg,image/png,image/webp" class="upload-input">
+                    </label>
+                    <p class="file-info" id="fileInfo">No image selected</p>
+                </div>
+
+                <div class="control-group">
+                    <label for="gridSize" class="slider-label">
+                        <span>Grid Size (Columns): <strong id="gridSizeValue">10</strong></span>
+                    </label>
+                    <input type="range" id="gridSize" min="5" max="100" value="10" class="slider">
+                </div>
+
+                <div class="control-group">
+                    <div class="resolution-info">
+                        <span id="resolutionText">Grid: - × -</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="showGridLines" checked>
+                        <span>Show Grid Lines</span>
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <button id="downloadBtn" class="download-btn" disabled>Download PNG</button>
+                </div>
+            </div>
+
+            <div class="preview-panel">
+                <div id="emptyState" class="empty-state">
+                    <div class="empty-icon">🎨</div>
+                    <p>Upload an image to get started</p>
+                </div>
+
+                <div id="gridContainer" class="grid-container" style="display: none;">
+                    <div class="grid-wrapper">
+                        <div id="columnLabels" class="column-labels"></div>
+                        <div class="grid-row">
+                            <div id="rowLabels" class="row-labels"></div>
+                            <canvas id="gridCanvas" class="grid-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
